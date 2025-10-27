@@ -8,16 +8,22 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.json());
-app.use(cors());
+// Configure CORS
+app.use(cors({
+  origin: "https://endless-forge-web.web.app", // restrict to your frontend
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+}));
 
-// POST /summarize endpoint
+app.use(express.json());
+
+// Preflight handler (optional, but safer)
+app.options("*", cors());
+
 app.post("/summarize", async (req, res) => {
   const { text } = req.body;
 
-  if (!text) {
-    return res.status(400).json({ error: "Missing 'text' in request body" });
-  }
+  if (!text) return res.status(400).json({ error: "Missing 'text' in request body" });
 
   try {
     const response = await axios.post(
