@@ -1,5 +1,6 @@
 import express from "express";
 import axios from "axios";
+import cors from "cors";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -8,6 +9,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
+app.use(cors());
 
 // POST /summarize endpoint
 app.post("/summarize", async (req, res) => {
