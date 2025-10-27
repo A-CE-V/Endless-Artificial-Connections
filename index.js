@@ -10,19 +10,15 @@ const PORT = process.env.PORT || 3000;
 
 // Configure CORS
 app.use(cors({
-  origin: "https://endless-forge-web.web.app", // restrict to your frontend
+  origin: "https://endless-forge-web.web.app",
   methods: ["GET", "POST", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
 }));
 
 app.use(express.json());
 
-// Preflight handler (optional, but safer)
-app.options("*", cors());
-
 app.post("/summarize", async (req, res) => {
   const { text } = req.body;
-
   if (!text) return res.status(400).json({ error: "Missing 'text' in request body" });
 
   try {
