@@ -63,9 +63,11 @@ app.post("/generate-image", async (req, res) => {
 
   try {
     const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${process.env.NANO_BANANA_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateImage?key=${process.env.NANO_BANANA_API_KEY}`,
       {
-        contents: [{ parts: [{ text: `Generate an image of: ${query}` }] }]
+        prompt: {
+          text: query
+        }
       }
     );
 
@@ -75,6 +77,7 @@ app.post("/generate-image", async (req, res) => {
     res.status(500).json({ error: error.response?.data || "Failed to generate image" });
   }
 });
+
 
 
 /**
