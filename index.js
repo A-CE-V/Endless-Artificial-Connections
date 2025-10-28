@@ -2,16 +2,11 @@ import express from "express";
 import axios from "axios";
 import cors from "cors";
 import dotenv from "dotenv";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
-const ai = new GoogleGenerativeAI(process.env.NANO_BANANA_API_KEY);
-
-
 
 // Configure CORS
 app.use(
@@ -25,20 +20,17 @@ app.use(
 app.use(express.json());
 
 /**
- * Summarization endpoint (Hugging Face)
+ * 📄 Summarization Endpoint
+ * Uses Hugging Face BART summarizer (stable and free)
  */
 app.post("/summarize", async (req, res) => {
   const { text } = req.body;
   if (!text) return res.status(400).json({ error: "Missing 'text' in request body" });
 
   try {
-    // Use the Mistral model hosted on Hugging Face
     const response = await axios.post(
-      "https://api-inference.huggingface.co/models/mistralai/Mixtral-8x7B-Instruct-v0.1",
-      {
-        inputs: `Summarize this text in a clear and concise way:\n\n${text}`,
-        parameters: { max_new_tokens: 200, temperature: 0.3 },
-      },
+      "https://api-inference.huggingface.co/models/facebook/bart-large-cnn",
+      { inputs: text },
       {
         headers: {
           Authorization: `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
@@ -47,10 +39,7 @@ app.post("/summarize", async (req, res) => {
       }
     );
 
-    // Extract model response
-    const summary =
-      response.data[0]?.generated_text?.trim() || "No summary generated";
-
+    const summary = response.data[0]?.summary_text || "No summary generated";
     res.json({ summary });
   } catch (error) {
     console.error("Summarization error:", error.response?.data || error.message);
@@ -59,42 +48,35 @@ app.post("/summarize", async (req, res) => {
 });
 
 /**
- * NEW: Nano Banana (Gemini 2.5 Flash Image) endpoint
+ * 🍌 Nano Banana (now Hugging Face FLUX.1) Endpoint
  * Generates an image from a text prompt.
  */
-
-// POST /generate
 app.post("/generate", async (req, res) => {
+  const { prompt } = req.body;
+  if (!prompt) return res.status(400).json({ error: "Missing prompt" });
+
   try {
-    const { prompt } = req.body;
-    if (!prompt) {
-      return res.status(400).json({ error: "Missing prompt" });
-    }
-
-    const model = ai.getGenerativeModel({ model: "gemini-2.5-flash-image" });
-    const response = await model.generateContent(prompt);
-
-    const parts = response.response?.candidates?.[0]?.content?.parts || [];
-    for (const part of parts) {
-      if (part.inlineData?.data) {
-        const imageBuffer = Buffer.from(part.inlineData.data, "base64");
-        res.setHeader("Content-Type", "image/png");
-        return res.send(imageBuffer);
+    const response = await axios.post(
+      "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell",
+      { inputs: prompt },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
+        },
+        responseType: "arraybuffer", // Receive binary data
       }
-    }
+    );
 
-    res.status(500).json({ error: "No image data in response" });
-  } catch (err) {
-    console.error("Gemini generate error:", err);
-    res.status(500).json({ error: err.message });
+    res.setHeader("Content-Type", "image/png");
+    res.send(Buffer.from(response.data));
+  } catch (error) {
+    console.error("Image generation error:", error.response?.data || error.message);
+    res.status(500).json({ error: "Failed to generate image" });
   }
 });
 
-
-
-
 /**
- * Health endpoint
+ * 🩺 Health Check
  */
 app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
