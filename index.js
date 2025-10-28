@@ -96,11 +96,33 @@ app.post("/generate", async (req, res) => {
       {
         headers: {
           Authorization: `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
+          Accept: "image/png", // 👈 Required for image output
         },
-        responseType: "arraybuffer", // Receive binary data
+        responseType: "arraybuffer", // 👈 Receive raw binary data
+        validateStatus: () => true,
       }
     );
 
+    const contentType = response.headers["content-type"];
+
+    // If the response is JSON instead of PNG, show the error message
+    if (contentType && contentType.includes("application/json")) {
+      const json = JSON.parse(Buffer.from(response.data).toString("utf8"));
+      console.error("Image generation error:", json.error);
+
+      // Handle model warming up (common in Render/HuggingFace free tier)
+      if (json.error?.includes("loading")) {
+        return res.status(503).json({
+          status: "loading",
+          message:
+            "Model is starting on Hugging Face — please retry in 30–60 seconds.",
+        });
+      }
+
+      return res.status(500).json({ error: json.error || "Unknown error" });
+    }
+
+    // Success — send PNG image
     res.setHeader("Content-Type", "image/png");
     res.send(Buffer.from(response.data));
   } catch (error) {
@@ -108,6 +130,7 @@ app.post("/generate", async (req, res) => {
     res.status(500).json({ error: "Failed to generate image" });
   }
 });
+
 
 /**
  * 🩺 Health Check
