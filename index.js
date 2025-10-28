@@ -62,40 +62,20 @@ app.post("/generate-image", async (req, res) => {
   if (!query) return res.status(400).json({ error: "Missing 'query' in request body" });
 
   try {
-    const apiUrl =
-      "https://aiplatform.googleapis.com/v1/projects/688861403033/locations/global/publishers/google/models/gemini-2.5-flash-image:generateContent";
+    const response = await axios.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${process.env.NANO_BANANA_API_KEY}`,
+      {
+        contents: [{ parts: [{ text: `Generate an image of: ${query}` }] }]
+      }
+    );
 
-    const payload = {
-      model: "gemini-2.5-flash-image",
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: query }],
-        },
-      ],
-      responseModalities: ["IMAGE"],
-    };
-
-    const response = await axios.post(apiUrl, payload, {
-      headers: {
-        Authorization: `Bearer ${process.env.NANO_BANANA_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-    });
-
-    // Gemini image responses return inline base64 image data
-    const imageBase64 = response.data?.candidates?.[0]?.content?.parts?.[0]?.inline_data?.data;
-
-    if (!imageBase64) {
-      return res.status(500).json({ error: "No image data returned from API" });
-    }
-
-    res.json({ image: `data:image/png;base64,${imageBase64}` });
+    res.json({ data: response.data });
   } catch (error) {
-    console.error(error.response?.data || error.message);
-    res.status(500).json({ error: "Failed to generate image" });
+    console.error("Image generation error:", error.response?.data || error.message);
+    res.status(500).json({ error: error.response?.data || "Failed to generate image" });
   }
 });
+
 
 /**
  * Health endpoint
