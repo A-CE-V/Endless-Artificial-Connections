@@ -63,7 +63,7 @@ app.post("/generate-image", async (req, res) => {
 
   try {
     const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateImage?key=${process.env.NANO_BANANA_API_KEY}`,
+      `https://generativeai.googleapis.com/v1beta/images:generate?key=${process.env.NANO_BANANA_API_KEY}`,
       {
         prompt: {
           text: query
@@ -71,12 +71,18 @@ app.post("/generate-image", async (req, res) => {
       }
     );
 
-    res.json({ data: response.data });
+    const imageBase64 = response.data?.images?.[0]?.base64Data;
+    if (!imageBase64) throw new Error("No image data returned from API");
+
+    res.json({
+      imageUrl: `data:image/png;base64,${imageBase64}`
+    });
   } catch (error) {
     console.error("Image generation error:", error.response?.data || error.message);
     res.status(500).json({ error: error.response?.data || "Failed to generate image" });
   }
 });
+
 
 
 
