@@ -9,9 +9,8 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.NANO_BANANA_API_KEY,
-});
+const ai = new GoogleGenerativeAI(process.env.NANO_BANANA_API_KEY);
+
 
 
 // Configure CORS
@@ -67,37 +66,30 @@ app.post("/summarize", async (req, res) => {
 // POST /generate
 app.post("/generate", async (req, res) => {
   try {
-    const prompt = req.body.prompt;
+    const { prompt } = req.body;
     if (!prompt) {
       return res.status(400).json({ error: "Missing prompt" });
     }
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-image",
-      contents: prompt,
-    });
+    const model = ai.getGenerativeModel({ model: "gemini-2.5-flash-image" });
+    const response = await model.generateContent(prompt);
 
-    const parts = response.candidates?.[0]?.content?.parts || [];
+    const parts = response.response?.candidates?.[0]?.content?.parts || [];
     for (const part of parts) {
       if (part.inlineData?.data) {
-        const imageData = part.inlineData.data;
-        const imageBuffer = Buffer.from(imageData, "base64");
-
-        // Option 1 — send directly as image
+        const imageBuffer = Buffer.from(part.inlineData.data, "base64");
         res.setHeader("Content-Type", "image/png");
         return res.send(imageBuffer);
-
-        // Option 2 — return base64 JSON instead
-        // return res.json({ image: imageData });
       }
     }
 
     res.status(500).json({ error: "No image data in response" });
   } catch (err) {
-    console.error(err);
+    console.error("Gemini generate error:", err);
     res.status(500).json({ error: err.message });
   }
 });
+
 
 
 
