@@ -8,6 +8,11 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+const ai = new GoogleGenAI({
+  apiKey: process.env.NANO_BANANA_API_KEY,
+});
+
+
 // Configure CORS
 app.use(
   cors({
@@ -57,32 +62,41 @@ app.post("/summarize", async (req, res) => {
  * NEW: Nano Banana (Gemini 2.5 Flash Image) endpoint
  * Generates an image from a text prompt.
  */
-app.post("/generate-image", async (req, res) => {
-  const { query } = req.body;
-  if (!query) return res.status(400).json({ error: "Missing 'query' in request body" });
 
+// POST /generate
+app.post("/generate", async (req, res) => {
   try {
-    const response = await axios.post(
-      `https://generativeai.googleapis.com/v1beta/images:generate?key=${process.env.NANO_BANANA_API_KEY}`,
-      {
-        prompt: {
-          text: query
-        }
-      }
-    );
+    const prompt = req.body.prompt;
+    if (!prompt) {
+      return res.status(400).json({ error: "Missing prompt" });
+    }
 
-    const imageBase64 = response.data?.images?.[0]?.base64Data;
-    if (!imageBase64) throw new Error("No image data returned from API");
-
-    res.json({
-      imageUrl: `data:image/png;base64,${imageBase64}`
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash-image",
+      contents: prompt,
     });
-  } catch (error) {
-    console.error("Image generation error:", error.response?.data || error.message);
-    res.status(500).json({ error: error.response?.data || "Failed to generate image" });
+
+    const parts = response.candidates?.[0]?.content?.parts || [];
+    for (const part of parts) {
+      if (part.inlineData?.data) {
+        const imageData = part.inlineData.data;
+        const imageBuffer = Buffer.from(imageData, "base64");
+
+        // Option 1 — send directly as image
+        res.setHeader("Content-Type", "image/png");
+        return res.send(imageBuffer);
+
+        // Option 2 — return base64 JSON instead
+        // return res.json({ image: imageData });
+      }
+    }
+
+    res.status(500).json({ error: "No image data in response" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
   }
 });
-
 
 
 
