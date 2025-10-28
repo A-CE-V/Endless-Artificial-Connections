@@ -47,6 +47,40 @@ app.post("/summarize", async (req, res) => {
   }
 });
 
+app.post("/summarize-alt", async (req, res) => {
+  const { text } = req.body;
+  if (!text)
+    return res.status(400).json({ error: "Missing 'text' in request body" });
+
+  try {
+    const response = await axios.post(
+      "https://api-inference.huggingface.co/models/mistralai/Mixtral-8x7B-v0.1",
+      {
+        inputs: `Summarize the following text clearly and concisely:\n\n${text}`,
+        parameters: { max_new_tokens: 300, temperature: 0.3 },
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    // Extract generated summary text
+    const summary =
+      response.data?.[0]?.generated_text?.trim() ||
+      response.data?.generated_text?.trim() ||
+      "No summary generated";
+
+    res.json({ summary });
+  } catch (error) {
+    console.error("Summarization error:", error.response?.data || error.message);
+    res.status(500).json({ error: "Failed to summarize text" });
+  }
+});
+
+
 /**
  * 🍌 Nano Banana (now Hugging Face FLUX.1) Endpoint
  * Generates an image from a text prompt.
