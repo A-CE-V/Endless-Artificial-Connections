@@ -130,9 +130,7 @@ app.post("/generate", async (req, res) => {
 
   const selectedModel = IMAGE_MODELS[modelIndex];
   if (!selectedModel) {
-    return res
-      .status(400)
-      .json({ error: `Invalid model index '${modelIndex}'.` });
+    return res.status(400).json({ error: `Invalid model index '${modelIndex}'.` });
   }
 
   try {
@@ -144,8 +142,7 @@ app.post("/generate", async (req, res) => {
           Authorization: `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
           Accept: "image/png",
         },
-        responseType: "arraybuffer",
-        validateStatus: () => true,
+        responseType: "arraybuffer", 
       }
     );
 
@@ -154,37 +151,22 @@ app.post("/generate", async (req, res) => {
     if (contentType && contentType.includes("application/json")) {
       const json = JSON.parse(Buffer.from(response.data).toString("utf8"));
       console.error("Image generation error:", json.error);
-
-      if (json.error?.includes("loading")) {
-        return res.status(503).json({
-          status: "loading",
-          message:
-            "Model is starting on Hugging Face — please retry in 30–60 seconds.",
-        });
-      }
-
       return res.status(500).json({ error: json.error || "Unknown error" });
     }
 
-    // This sends the raw image data
-    res.setHeader("Content-Type", "image/png");
-    
-    // 💡 NEW CHANGE: Add Content-Length for robust binary transfer
-    const contentLength = response.headers["content-length"];
-    if (contentLength) {
-      res.setHeader("Content-Length", contentLength);
+    res.setHeader("Content-Type", contentType || "image/png");
+    res.setHeader("Cache-Control", "no-cache");
+    if (response.headers["content-length"]) {
+      res.setHeader("Content-Length", response.headers["content-length"]);
     }
-    
-    res.send(Buffer.from(response.data));
-    
+
+    res.end(response.data, "binary");
   } catch (error) {
-    console.error(
-      "Image generation error:",
-      error.response?.data || error.message
-    );
+    console.error("Image generation error:", error.message);
     res.status(500).json({ error: "Failed to generate image" });
   }
 });
+
 
 app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
