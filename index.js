@@ -28,7 +28,7 @@ const SUMMARIZATION_MODELS = [
   "mistralai/Mixtral-8x7B-v0.1"        // index 1
 ];
 
-const DETECTOR_MODEL = "Hello-SimpleAI/chatgpt-detector-roberta"; // reliable HF model
+const DETECTOR_MODEL = "roberta-base-openai-detector"; // reliable HF model
 
 
 app.post("/summarize", async (req, res) => {
