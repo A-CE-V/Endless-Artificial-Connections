@@ -24,11 +24,20 @@ app.use(express.json());
  * Uses Hugging Face BART summarizer (stable and free)
  */
 const SUMMARIZATION_MODELS = [
-  "facebook/bart-large-cnn",           // index 0
-  "google/pegasus-xsum"        // index 1
+  "meta-llama/Llama-3.3-70B-Instruct",
+  "mistralai/Mistral-Nemo-Instruct-2407",
+  "google/flan-t5-xx",
+  // Theese are for documents and academic articles:
+  "meta-llama/Llama-3.3-70B-Instruct-128K",
+  "google/long-t5-tglobal-base"
 ];
 
-const DETECTOR_MODEL = "roberta-base-openai-detector"; // reliable HF model
+
+ const DETECTOR_MODELS = [
+    "roberta-base-openai-detector",
+    "bert-large-uncased-finetuned-AI-Human-ERH",
+    "microsoft/phi-2-detector",
+  ];
 
 
 app.post("/summarize", async (req, res) => {
@@ -79,10 +88,6 @@ app.post("/summarize", async (req, res) => {
 });
 
 /**
- *  AI DETECTION ENDPOINT
- */
-
-/**
  * 🤖 Multi-Model AI Detection Endpoint
  * Combines several detectors and averages their confidence.
  */
@@ -90,12 +95,6 @@ app.post("/detect-ai", async (req, res) => {
   const { text } = req.body;
   if (!text) return res.status(400).json({ error: "Missing 'text' in request body" });
 
-  // 🧠 Use 3 solid detection models
-  const DETECTOR_MODELS = [
-    "roberta-base-openai-detector",
-    "KrisChaffin/roberta-base-ai-text-detector",
-    "microsoft/phi-2-detector",
-  ];
 
   try {
     // Query all detectors in parallel
