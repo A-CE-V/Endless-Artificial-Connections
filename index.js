@@ -25,7 +25,7 @@ app.use(express.json());
  */
 const SUMMARIZATION_MODELS = [
   "facebook/bart-large-cnn",           // index 0
-  "mistralai/Mixtral-8x7B-v0.1"        // index 1
+  "google/pegasus-xsum"        // index 1
 ];
 
 const DETECTOR_MODEL = "roberta-base-openai-detector"; // reliable HF model
@@ -82,39 +82,77 @@ app.post("/summarize", async (req, res) => {
  *  AI DETECTION ENDPOINT
  */
 
+/**
+ * 🤖 Multi-Model AI Detection Endpoint
+ * Combines several detectors and averages their confidence.
+ */
 app.post("/detect-ai", async (req, res) => {
   const { text } = req.body;
-
   if (!text) return res.status(400).json({ error: "Missing 'text' in request body" });
 
+  // 🧠 Use 3 solid detection models
+  const DETECTOR_MODELS = [
+    "roberta-base-openai-detector",
+    "KrisChaffin/roberta-base-ai-text-detector",
+    "microsoft/phi-2-detector",
+  ];
+
   try {
-    const response = await axios.post(
-      `https://api-inference.huggingface.co/models/${DETECTOR_MODEL}`,
-      { inputs: text },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-      }
+    // Query all detectors in parallel
+    const responses = await Promise.allSettled(
+      DETECTOR_MODELS.map((model) =>
+        axios.post(
+          `https://api-inference.huggingface.co/models/${model}`,
+          { inputs: text },
+          {
+            headers: {
+              Authorization: `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
+              "Content-Type": "application/json",
+            },
+          }
+        )
+      )
     );
 
-    // HF models often return something like:
-    // [{ "label": "AI", "score": 0.87 }, { "label": "Human", "score": 0.13 }]
-    const output = response.data[0];
-    let aiScore = 0;
+    // 🧩 Collect valid results
+    const results = responses
+      .filter((r) => r.status === "fulfilled" && r.value?.data)
+      .map((r, i) => {
+        const output = r.value.data[0];
+        let aiScore = 0;
 
-    if (Array.isArray(output)) {
-      const aiEntry = output.find((e) => e.label.toLowerCase().includes("ai"));
-      aiScore = aiEntry ? aiEntry.score : 0;
-    } else if (output?.label && output?.score !== undefined) {
-      aiScore = output.label.toLowerCase().includes("ai") ? output.score : 1 - output.score;
-    }
+        if (Array.isArray(output)) {
+          const aiEntry = output.find((e) =>
+            e.label.toLowerCase().includes("ai") || e.label.toLowerCase().includes("fake")
+          );
+          aiScore = aiEntry ? aiEntry.score : 0;
+        } else if (output?.label && output?.score !== undefined) {
+          aiScore = output.label.toLowerCase().includes("ai") || output.label.toLowerCase().includes("fake")
+            ? output.score
+            : 1 - output.score;
+        }
+
+        return {
+          model: DETECTOR_MODELS[i],
+          confidence: aiScore,
+        };
+      });
+
+    if (results.length === 0)
+      return res.status(500).json({ error: "All detection models failed" });
+
+    // 🧮 Average confidence across models
+    const avgConfidence =
+      results.reduce((sum, r) => sum + r.confidence, 0) / results.length;
 
     res.json({
-      model: DETECTOR_MODEL,
-      confidence: Math.round(aiScore * 100),
-      verdict: aiScore > 0.5 ? "Likely AI-generated" : "Likely human-written",
+      models_used: results.map((r) => r.model),
+      individual_results: results.map((r) => ({
+        model: r.model,
+        confidence: Math.round(r.confidence * 100),
+      })),
+      average_confidence: Math.round(avgConfidence * 100),
+      verdict: avgConfidence > 0.5 ? "Likely AI-generated" : "Likely human-written",
     });
   } catch (error) {
     console.error("AI detection error:", error.response?.data || error.message);
@@ -124,6 +162,7 @@ app.post("/detect-ai", async (req, res) => {
     });
   }
 });
+
 
 
 /**
