@@ -168,6 +168,13 @@ app.post("/generate", async (req, res) => {
 
     // This sends the raw image data
     res.setHeader("Content-Type", "image/png");
+    
+    // 💡 NEW CHANGE: Add Content-Length for robust binary transfer
+    const contentLength = response.headers["content-length"];
+    if (contentLength) {
+      res.setHeader("Content-Length", contentLength);
+    }
+    
     res.send(Buffer.from(response.data));
     
   } catch (error) {
