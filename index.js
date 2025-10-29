@@ -8,7 +8,6 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Configure CORS
 app.use(
   cors({
     origin: "https://endless-forge-web.web.app",
@@ -19,35 +18,28 @@ app.use(
 
 app.use(express.json());
 
-/**
- * 📄 Summarization Endpoint
- * Uses Hugging Face BART summarizer (stable and free)
- */
 const SUMMARIZATION_MODELS = [
-  "meta-llama/Llama-3.3-70B-Instruct",
-  "mistralai/Mistral-Nemo-Instruct-2407",
-  "google/flan-t5-xx",
-  // Theese are for documents and academic articles:
-  "meta-llama/Llama-3.3-70B-Instruct-128K",
-  "google/long-t5-tglobal-base"
+  "facebook/bart-large-cnn",
+  "sshleifer/distilbart-cnn-12-6",
+  "google/pegasus-xsum",
 ];
 
-
- const DETECTOR_MODELS = [
-    "roberta-base-openai-detector",
-    "bert-large-uncased-finetuned-AI-Human-ERH",
-    "microsoft/phi-2-detector",
-  ];
-
+const IMAGE_MODELS = [
+  "stabilityai/stable-cascade",
+  "stabilityai/stable-diffusion-2",
+];
 
 app.post("/summarize", async (req, res) => {
-  const { text, modelIndex = 0 } = req.body; // default to 0 if not provided
+  const { text, modelIndex = 0 } = req.body;
 
-  if (!text) return res.status(400).json({ error: "Missing 'text' in request body" });
+  if (!text)
+    return res.status(400).json({ error: "Missing 'text' in request body" });
 
   const selectedModel = SUMMARIZATION_MODELS[modelIndex];
   if (!selectedModel) {
-    return res.status(400).json({ error: `Invalid model index '${modelIndex}'.` });
+    return res
+      .status(400)
+      .json({ error: `Invalid model index '${modelIndex}'.` });
   }
 
   try {
@@ -62,8 +54,6 @@ app.post("/summarize", async (req, res) => {
       }
     );
 
-    // For Mixtral or other models, the output structure might differ.
-    // We'll try to handle both the summarization case and a generic text output case.
     let summary;
     if (response.data[0]?.summary_text) {
       summary = response.data[0].summary_text;
@@ -77,7 +67,6 @@ app.post("/summarize", async (req, res) => {
       model: selectedModel,
       summary,
     });
-
   } catch (error) {
     console.error("Summarization error:", error.response?.data || error.message);
     res.status(500).json({
@@ -87,71 +76,44 @@ app.post("/summarize", async (req, res) => {
   }
 });
 
-/**
- * 🤖 Multi-Model AI Detection Endpoint
- * Combines several detectors and averages their confidence.
- */
 app.post("/detect-ai", async (req, res) => {
   const { text } = req.body;
-  if (!text) return res.status(400).json({ error: "Missing 'text' in request body" });
+  if (!text)
+    return res.status(400).json({ error: "Missing 'text' in request body" });
 
+  const model = "openai-community/roberta-base-openai-detector";
 
   try {
-    // Query all detectors in parallel
-    const responses = await Promise.allSettled(
-      DETECTOR_MODELS.map((model) =>
-        axios.post(
-          `https://api-inference.huggingface.co/models/${model}`,
-          { inputs: text },
-          {
-            headers: {
-              Authorization: `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
-              "Content-Type": "application/json",
-            },
-          }
-        )
-      )
+    const response = await axios.post(
+      `https://api-inference.huggingface.co/models/${model}`,
+      { inputs: text },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+      }
     );
 
-    // 🧩 Collect valid results
-    const results = responses
-      .filter((r) => r.status === "fulfilled" && r.value?.data)
-      .map((r, i) => {
-        const output = r.value.data[0];
-        let aiScore = 0;
+    const scores = response.data[0];
+    let aiScore = 0;
+    let verdict = "Unknown";
 
-        if (Array.isArray(output)) {
-          const aiEntry = output.find((e) =>
-            e.label.toLowerCase().includes("ai") || e.label.toLowerCase().includes("fake")
-          );
-          aiScore = aiEntry ? aiEntry.score : 0;
-        } else if (output?.label && output?.score !== undefined) {
-          aiScore = output.label.toLowerCase().includes("ai") || output.label.toLowerCase().includes("fake")
-            ? output.score
-            : 1 - output.score;
-        }
-
-        return {
-          model: DETECTOR_MODELS[i],
-          confidence: aiScore,
-        };
-      });
-
-    if (results.length === 0)
-      return res.status(500).json({ error: "All detection models failed" });
-
-    // 🧮 Average confidence across models
-    const avgConfidence =
-      results.reduce((sum, r) => sum + r.confidence, 0) / results.length;
+    if (Array.isArray(scores)) {
+      const fakeEntry = scores.find(
+        (e) => e.label.toLowerCase() === "fake" || e.label.toLowerCase() === "ai"
+      );
+      if (fakeEntry) {
+        aiScore = fakeEntry.score;
+        verdict =
+          aiScore > 0.5 ? "Likely AI-generated" : "Likely human-written";
+      }
+    }
 
     res.json({
-      models_used: results.map((r) => r.model),
-      individual_results: results.map((r) => ({
-        model: r.model,
-        confidence: Math.round(r.confidence * 100),
-      })),
-      average_confidence: Math.round(avgConfidence * 100),
-      verdict: avgConfidence > 0.5 ? "Likely AI-generated" : "Likely human-written",
+      model_used: model,
+      confidence: Math.round(aiScore * 100),
+      verdict: verdict,
     });
   } catch (error) {
     console.error("AI detection error:", error.response?.data || error.message);
@@ -162,38 +124,38 @@ app.post("/detect-ai", async (req, res) => {
   }
 });
 
-
-
-/**
- * 🍌 Nano Banana (now Hugging Face FLUX.1) Endpoint
- * Generates an image from a text prompt.
- */
 app.post("/generate", async (req, res) => {
-  const { prompt } = req.body;
+  const { prompt, modelIndex = 0 } = req.body;
   if (!prompt) return res.status(400).json({ error: "Missing prompt" });
+
+  const selectedModel = IMAGE_MODELS[modelIndex];
+  if (!selectedModel) {
+    return res
+      .status(400)
+      .json({ error: `Invalid model index '${modelIndex}'.` });
+  }
 
   try {
     const response = await axios.post(
-      "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell",
+      `https://api-inference.huggingface.co/models/${selectedModel}`,
       { inputs: prompt },
+
       {
         headers: {
           Authorization: `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
-          Accept: "image/png", // 👈 Required for image output
+          Accept: "image/png",
         },
-        responseType: "arraybuffer", // 👈 Receive raw binary data
+        responseType: "arraybuffer",
         validateStatus: () => true,
       }
     );
 
     const contentType = response.headers["content-type"];
 
-    // If the response is JSON instead of PNG, show the error message
     if (contentType && contentType.includes("application/json")) {
       const json = JSON.parse(Buffer.from(response.data).toString("utf8"));
       console.error("Image generation error:", json.error);
 
-      // Handle model warming up (common in Render/HuggingFace free tier)
       if (json.error?.includes("loading")) {
         return res.status(503).json({
           status: "loading",
@@ -205,19 +167,17 @@ app.post("/generate", async (req, res) => {
       return res.status(500).json({ error: json.error || "Unknown error" });
     }
 
-    // Success — send PNG image
     res.setHeader("Content-Type", "image/png");
     res.send(Buffer.from(response.data));
   } catch (error) {
-    console.error("Image generation error:", error.response?.data || error.message);
+    console.error(
+      "Image generation error:",
+      error.response?.data || error.message
+    );
     res.status(500).json({ error: "Failed to generate image" });
   }
 });
 
-
-/**
- * 🩺 Health Check
- */
 app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
