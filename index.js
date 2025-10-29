@@ -19,14 +19,19 @@ app.use(
 app.use(express.json());
 
 const SUMMARIZATION_MODELS = [
+  "Falconsai/medical_summarization",
   "facebook/bart-large-cnn",
   "sshleifer/distilbart-cnn-12-6",
   "google/pegasus-xsum",
 ];
 
 const IMAGE_MODELS = [
-  "stabilityai/stable-cascade",
-  "stabilityai/stable-diffusion-2",
+  "stabilityai/stable-diffusion-xl-base-1.0",
+  "black-forest-labs/FLUX.1-dev",
+  "stabilityai/stable-diffusion-2-1",
+  "stabilityai/stable-diffusion-3-medium-diffusers",
+  "crynux-network/stable-diffusion-v1-5",
+  "Qwen/Qwen-Image"
 ];
 
 app.post("/summarize", async (req, res) => {
