@@ -166,23 +166,10 @@ app.post("/generate", async (req, res) => {
       return res.status(500).json({ error: json.error || "Unknown error" });
     }
 
-    // --- START OF FIX ---
-    // 1. Convert the binary data (ArrayBuffer) into a Node.js Buffer
-    const imageBuffer = Buffer.from(response.data, 'binary');
-
-    // 2. Convert the Buffer into a Base64 string
-    const imageBase64 = imageBuffer.toString('base64');
-
-    // 3. Create a data URI, which can be put directly into an <img> src
-    const dataUri = `data:image/png;base64,${imageBase64}`;
-
-    // 4. Send a JSON response containing the data URI
-    res.json({
-      model: selectedModel,
-      image_url: dataUri,
-    });
-    // --- END OF FIX ---
-
+    // This sends the raw image data
+    res.setHeader("Content-Type", "image/png");
+    res.send(Buffer.from(response.data));
+    
   } catch (error) {
     console.error(
       "Image generation error:",
